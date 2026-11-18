@@ -1,0 +1,31 @@
+# Render Blueprint: New > Blueprint > pick this repo. Free-tier friendly (web + database).
+# Secrets marked sync:false are entered in the Render dashboard and are NOT stored in git.
+databases:
+  - name: hotel-db
+    plan: free
+    databaseName: hotel
+    user: hotel
+
+services:
+  - type: web
+    name: hotel-api
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install && npm run migrate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: false          # CI triggers the deploy hook after tests pass
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: DATABASE_URL, fromDatabase: { name: hotel-db, property: connectionString } }
+      - { key: DATABASE_SSL, value: 'true' }
+      - { key: JWT_ACCESS_SECRET, generateValue: true }
+      - { key: CORS_ORIGIN, sync: false }        # e.g. https://your-app.vercel.app
+      - { key: PUBLIC_BASE_URL, sync: false }    # e.g. https://hotel-api.onrender.com
+      - { key: ADMIN_EMAIL, sync: false }
+      - { key: ADMIN_PASSWORD, sync: false }
+      - { key: SMTP_HOST, sync: false }
+      - { key: SMTP_USER, sync: false }
+      - { key: SMTP_PASS, sync: false }
+      - { key: REDIS_URL, sync: false }          # optional: enables the BullMQ queue

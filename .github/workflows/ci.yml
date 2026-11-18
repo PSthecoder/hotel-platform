@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  server:
+    name: Server tests (Node + PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: hotel_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:test@localhost:5432/hotel_test
+      # Throw-away value that only exists for this CI run; real secrets live in Render / Vercel dashboards.
+      JWT_ACCESS_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      BCRYPT_COST: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: server/package.json }
+      - run: npm install --no-audit --no-fund
+        working-directory: server
+      - run: npm run migrate
+        working-directory: server
+      - run: npm test
+        working-directory: server
+      - name: Seed pipeline smoke test (messy data -> clean database)
+        run: npm run seed
+        working-directory: server
+        env: { NODE_ENV: development }
+      - run: npm audit --audit-level=high
+        working-directory: server
+        continue-on-error: true
+
+  client:
+    name: Client tests and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: client/package.json }
+      - run: npm install --no-audit --no-fund
+        working-directory: client
+      - run: npm test
+        working-directory: client
+      - run: npm run build
+        working-directory: client
+        env: { VITE_API_URL: 'https://example.invalid/api' }
+
+  secrets-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+
+  deploy:
+    name: Deploy (main only, after tests pass)
+    needs: [server, client, secrets-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+    steps:
+      # Vercel deploys the front end through its GitHub integration (set "Root Directory" to client).
+      # Render is told to redeploy only after CI is green, via its deploy hook stored as a GitHub secret.
+      - name: Trigger Render deploy
+        if: env.RENDER_HOOK != ''
+        run: curl -fsS -X POST "$RENDER_HOOK"
+      - name: Skipped
+        if: env.RENDER_HOOK == ''
+        run: echo "RENDER_DEPLOY_HOOK_URL not set; relying on Render auto-deploy."

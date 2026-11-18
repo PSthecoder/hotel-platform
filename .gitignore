@@ -1,0 +1,9 @@
+node_modules/
+.env
+*.env.local
+dist/
+coverage/
+uploads/*
+!uploads/.gitkeep
+server/db/raw/
+.DS_Store
