@@ -10,11 +10,13 @@
     "migrate": "node db/migrate.js",
     "generate-data": "node scripts/generate-raw-data.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test \"tests/**/*.test.js\"",
-    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test": "node --test",
+    "test:unit": "node --test tests/unit/cleaning.test.js tests/unit/metrics.test.js tests/unit/validation.test.js",
     "lint": "node --check src/app.js"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.12.0",
